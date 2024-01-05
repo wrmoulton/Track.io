@@ -9,7 +9,6 @@ import Foundation
 
 class BookManager: ObservableObject {
     @Published var books: Books? = nil
-
     func getBookInfo(title: String) {
         let sessionConfig = URLSessionConfiguration.default
         let session = URLSession(configuration: sessionConfig, delegate: nil, delegateQueue: nil)

@@ -1,11 +1,28 @@
 
 import SwiftUI
+import FirebaseAuth
 
+
+struct RootView: View {
+    @AppStorage("isLoggedIn") private var isLoggedIn = false
+    @AppStorage("skipLogin") private var skipLogin = false
+
+    var body: some View {
+        if isLoggedIn || skipLogin {
+            ContentView(isLoggedIn: $isLoggedIn, skipLogin: $skipLogin)
+        } else {
+            LogInListView(isLoggedIn: $isLoggedIn, skipLogin: $skipLogin)
+        }
+    }
+}
 struct ContentView: View {
     @ObservedObject var bookManager = BookManager()
     @State private var searchTerm: String = ""
     @State private var navigateToBook = false
     @State private var showPopover = false
+    @Binding var isLoggedIn: Bool
+    @Binding var skipLogin: Bool
+    @State private var navigateToAllBooks = false
 
     var body: some View {
         NavigationView {
@@ -44,15 +61,24 @@ struct ContentView: View {
 
                         HStack {
                             ZStack {
+                                NavigationLink(destination: AllBooksView(), isActive: $navigateToAllBooks) {
+                                                   EmptyView()
+                                               }
                                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                                     .fill(Color.blue.opacity(0.3))
                                     .frame(width: 150, height: 200)
-                                Text("Collections")
+
+                                Text("Diary")
                                     .padding(.bottom, 75)
                                     .bold()
+
                                 Image(systemName: "plus.square")
-                                    .font(.largeTitle) // Adjust the font size as needed
+                                    .font(.largeTitle)
+                                    .onTapGesture {
+                                        navigateToAllBooks = true
+                                    }
                             }
+
                             .padding(.trailing,10)
                             ZStack {
                                 RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -86,7 +112,7 @@ struct ContentView: View {
                 }
 
                 if showPopover {
-                    PopoverContentView()
+                    PopoverContentView(isLoggedIn: $isLoggedIn, skipLogin: $skipLogin)
                         .frame(width: 350) // Adjust width of the side menu, remove explicit height
                         .transition(.move(edge: .trailing)) // Slide in from the right
                         .zIndex(1) // Ensure menu is above main content
@@ -107,11 +133,7 @@ extension UIApplication {
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
-    }
-}
+
 
 struct BookListView: View {
     var books: [BookItem] // Replace 'BookItem' with your actual book item type
@@ -125,21 +147,27 @@ struct BookListView: View {
 
 // Define the content for your popover
 struct PopoverContentView: View {
+    @Binding var isLoggedIn: Bool
+    @Binding var skipLogin: Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) { // Adjust the spacing value as needed
-            NavigationLink(destination: LogInListView()){
-                HStack {
-                    Text("Log In")
-                        .bold()
-                        .padding(.trailing, 200)
-                        .foregroundColor(.black)
-                    Image(systemName: "lock.fill")
-                        .foregroundColor(.black)
+            VStack(alignment: .leading, spacing: 10) {
+                Button(action: {
+                    isLoggedIn = false
+                    skipLogin = false
+                }) {
+                    HStack {
+                        Text("Log In")
+                            .bold()
+                            .foregroundColor(.black)
+                            .padding(.trailing, 200)
+                        Image(systemName: "lock.fill")
+                            .foregroundColor(.black)
+                    }
+                    .frame(width: 300, height: 50)
+                    .background(Color.gray.opacity(0.5))
+                    .cornerRadius(10)
                 }
-                .frame(width: 300, height: 50)
-                .background(Color.gray.opacity(0.5))
-                .cornerRadius(10)
-            }
+            
                 NavigationLink(destination: FriendsListView()){
                     HStack {
                         Text("Friends")
@@ -153,6 +181,28 @@ struct PopoverContentView: View {
                     .background(Color.gray.opacity(0.5))
                     .cornerRadius(10)
                 }
+                HStack {
+                    Text("Diary")
+                        .bold()
+                        .padding(.trailing, 200)
+                        .foregroundColor(.black)
+                    Image(systemName: "book")
+                        .foregroundColor(.black)
+                }
+                .frame(width: 300, height: 50)
+                .background(Color.gray.opacity(0.5))
+                .cornerRadius(10)
+                HStack {
+                    Text("Wishlist")
+                        .bold()
+                        .padding(.trailing, 200)
+                        .foregroundColor(.black)
+                    Image(systemName: "book")
+                        .foregroundColor(.black)
+                }
+                .frame(width: 300, height: 50)
+                .background(Color.gray.opacity(0.5))
+                .cornerRadius(10)
             }
             .padding()
         }
@@ -162,7 +212,10 @@ struct LogInListView: View {
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var isLoggingIn: Bool = false
-
+    @State private var wrongUsername = 0
+    @State private var wrongPassword = 0
+    @Binding var isLoggedIn: Bool
+    @Binding var skipLogin: Bool
     var body: some View {
         ZStack {
             Color.blue.ignoresSafeArea()
@@ -191,19 +244,26 @@ struct LogInListView: View {
                     .bold()
                     .padding(.bottom)
                 
-                TextField("Username", text: $username)
+                TextField("Email", text: $username)
                     .padding()
                     .background(Color.black.opacity(0.05))
                     .cornerRadius(10)
                     .padding(.horizontal, 40)
+                    .border(.red, width: CGFloat(wrongUsername))
 
                 SecureField("Password", text: $password)
                     .padding()
                     .background(Color.black.opacity(0.05))
                     .cornerRadius(10)
                     .padding(.horizontal, 40)
-                
-                Button(action: {loginUser(username: username, password: password)}) {
+                    .border(.red, width: CGFloat(wrongPassword))
+                Button("Skip Login") {
+                                skipLogin = true
+                            }
+                            .padding()
+                Button(action: { loginUser(username: self.username, password: self.password) }) {
+        
+
                     Text(isLoggingIn ? "Logging in..." : "Log In")
                         .bold()
                         .foregroundColor(.white)
@@ -222,8 +282,7 @@ struct LogInListView: View {
 
     func loginUser(username: String, password: String) {
         isLoggingIn = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            isLoggingIn = false
+        Auth.auth().createUser(withEmail: username, password: password) { authResult, error in
         }
     }
 }
